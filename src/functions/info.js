@@ -9,7 +9,7 @@ puppeteer.use(StealthPlugin());
 const { warnIfNotUsingStealth } = require("../helpers/helperFunctions.js");
 
 const info = async (contract, slug, optionsGiven = {}) => {
-    const url = `https://opensea.io/assets/ethereum/${contract}/${slug}`
+  const url = `https://opensea.io/assets/ethereum/${contract}/${slug}`
   return await infoByUrl(url, optionsGiven);
 }
 
@@ -59,12 +59,54 @@ const infoByUrl = async (url, optionsGiven = {}) => {
   }
 
   logs && console.log("extracting offers and stats from __wired__ variable");
-  return __wired__
+  return {
+    info: _parseInfo_(__wired__, url),
+  }
 }
 
 function _parseWiredVariable(html) {
   const str = html.split("window.__wired__=")[1].split("</script>")[0];
   return JSON.parse(str);
+}
+
+function _parseInfo_(__wired__, url) {
+    const dict = {}
+
+    //get info
+    Object.values(__wired__.records)
+    .filter(o => o.__typename === "AssetType")
+    .filter(o => o.name)
+    .map(record => {
+        dict.name = record.name;
+        dict.contract = record.assetContract["__ref"]
+        dict.url = url
+        dict.favorites = record.favoritesCount;
+        dict.image = record.displayImageUrl;
+        dict.views = record.numVisitors;
+        dict.price = 0
+    })
+
+    //get price
+    Object.values(__wired__.records)
+    .filter(o => o.__typename === "AssetQuantityType")
+    .filter(o => o.quantity)
+    .map(record => {
+        if(record.quantity != "1") { 
+            dict.price = record.quantity / 1000000000000000000
+        }
+    })
+
+    //get owner
+    Object.values(__wired__.records)
+    .filter(o => o.__typename === "AccountType")
+    .filter(o => o.address)
+    .map(record => {
+        dict.owner = {}
+        dict.owner.address = record.address
+        dict.owner.image = record.imageUrl
+    })
+
+    return dict
 }
 
 module.exports = info;
